@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Tier badge colours */
+  --color-tier-platinum: #7C3AED;
+  --color-tier-gold: #D97706;
+  --color-tier-silver: #6B7280;
+  --color-tier-bronze: #92400E;
+
+  /* Signal tier colours */
+  --color-signal-high: #059669;
+  --color-signal-medium: #D97706;
+  --color-signal-low: #DC2626;
+
+  /* Typography */
+  --font-sans: system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+
+  /* Spacing */
+  --spacing-card: 1.5rem;
+  --spacing-section: 2.5rem;
+
+  /* Surfaces */
+  --surface-gap-fill: #FEF9E7;
+  --border-gap-fill: #FDE68A;
+}
+
+/* Inference banner — always visible, not a dismissable alert */
+.inference-banner {
+  @apply text-xs text-gray-500 border-t border-gray-100 pt-2 mt-3;
+}
+
+/* Signal tier chip */
+.signal-chip {
+  @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+}
+
+.signal-chip--high {
+  @apply bg-emerald-50 text-emerald-700 border border-emerald-200;
+}
+
+.signal-chip--medium {
+  @apply bg-amber-50 text-amber-700 border border-amber-200;
+}
+
+.signal-chip--low {
+  @apply bg-red-50 text-red-700 border border-red-200;
+}
+
+/* Gap-fill card — visually distinct from main shortlist */
+.gap-fill-card {
+  background: var(--surface-gap-fill);
+  border: 1px solid var(--border-gap-fill);
+  @apply rounded-lg p-6;
+}

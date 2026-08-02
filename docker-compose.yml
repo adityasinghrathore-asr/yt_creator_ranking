@@ -1,0 +1,87 @@
+version: "3.9"
+
+# All ports, credentials, and service names derive from config.yaml.
+# The backend reads config.yaml directly at startup.
+# Change infrastructure settings in config.yaml — not here.
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    volumes:
+      - ./config.yaml:/config.yaml:ro
+      - ./backend:/app
+      - ./backend/app/data/synthetic:/app/app/data/synthetic:ro
+    ports:
+      - "8000:8000"
+    environment:
+      # Override any config.yaml value via env var — config.py checks these first
+      DATABASE_URL: postgresql+asyncpg://cpi_user:cpi_password@db:5432/cpi
+      REDIS_URL: redis://redis:6379/0
+      # Drop your real API keys here for local dev (do not commit)
+      # ANTHROPIC_API_KEY: sk-ant-...
+      # YOUTUBE_API_KEY: AIza...
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A app.workers.celery_app worker --loglevel=info
+    volumes:
+      - ./config.yaml:/config.yaml:ro
+      - ./backend:/app
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cpi_user:cpi_password@db:5432/cpi
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - backend
+      - redis
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    volumes:
+      - ./config.yaml:/config.yaml:ro
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: cpi_user
+      POSTGRES_PASSWORD: cpi_password
+      POSTGRES_DB: cpi
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cpi_user -d cpi"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

@@ -1,0 +1,261 @@
+# =============================================================================
+# CPI — Creator Partnership Intelligence
+# CENTRAL CONFIGURATION FILE
+# All settings for every part of the system live here.
+# Backend reads this via backend/app/config.py
+# Frontend reads the [frontend] block via next.config.ts
+# Docker reads [infrastructure] for port/service setup
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# APP
+# -----------------------------------------------------------------------------
+app:
+  name: "Creator Partnership Intelligence"
+  version: "0.1.0"
+  environment: "development"          # development | staging | production
+  debug: true
+  log_level: "INFO"                   # DEBUG | INFO | WARNING | ERROR
+
+# -----------------------------------------------------------------------------
+# DATA MODE
+# Controls where creator data comes from throughout the whole system.
+#   synthetic       — local JSON files only, no live API calls
+#   hybrid          — real Anthropic + synthetic YouTube/3rd-party data
+#   live            — all external APIs active
+# -----------------------------------------------------------------------------
+data_mode: "synthetic"                # synthetic | hybrid | live
+
+# -----------------------------------------------------------------------------
+# API KEYS
+# Leave blank ("") if unused for the selected data_mode.
+# In production these are injected from GCP Secret Manager; local dev uses .env
+# -----------------------------------------------------------------------------
+api_keys:
+  anthropic: ""                       # Required for data_mode: hybrid | live
+  youtube: ""                         # Required for data_mode: live
+  hypeauditor: ""                     # Optional enrichment layer
+  perspective: ""                     # Required for toxicity scoring (live mode)
+  jira_api_token: ""
+  jira_email: ""
+  openai_moderation: ""               # Secondary brand-safety check (live mode)
+
+# -----------------------------------------------------------------------------
+# EXTERNAL SERVICE URLS
+# -----------------------------------------------------------------------------
+services:
+  jira_base_url: "https://your-org.atlassian.net"
+  jira_project_key: "CPI"
+  hypeauditor_base_url: "https://api.hypeauditor.com/v1"
+  perspective_base_url: "https://commentanalyzer.googleapis.com/v1alpha1"
+
+# -----------------------------------------------------------------------------
+# INFRASTRUCTURE — DATABASE & CACHE
+# -----------------------------------------------------------------------------
+infrastructure:
+  # Postgres
+  db_host: "localhost"
+  db_port: 5432
+  db_name: "cpi"
+  db_user: "cpi_user"
+  db_password: "cpi_password"         # Override via DATABASE_URL env var in prod
+  db_pool_size: 10
+  db_max_overflow: 20
+
+  # Redis (Celery broker + result backend)
+  redis_host: "localhost"
+  redis_port: 6379
+  redis_db: 0
+  redis_password: ""
+
+  # Backend HTTP
+  backend_host: "0.0.0.0"
+  backend_port: 8000
+  backend_reload: true                # Auto-reload in development
+
+  # Frontend HTTP
+  frontend_port: 3000
+
+# -----------------------------------------------------------------------------
+# SECURITY
+# -----------------------------------------------------------------------------
+security:
+  secret_key: "change-me-in-production-use-a-long-random-string"
+  jwt_algorithm: "HS256"
+  jwt_expire_minutes: 480             # 8 hours
+  cors_origins:                       # List of allowed frontend origins
+    - "http://localhost:3000"
+    - "http://127.0.0.1:3000"
+
+# -----------------------------------------------------------------------------
+# SCORING ENGINE
+# Dimension weights per campaign objective.
+# Must sum to 100 per objective. Edit here; scoring_engine.py reads these.
+# -----------------------------------------------------------------------------
+scoring:
+  # Post-filter candidate pool limits
+  min_candidate_pool: 10
+  max_candidate_pool: 500
+  advisory_pool_threshold: 50         # Show advisory note below this
+  constraint_pool_threshold: 29       # Show specific relaxation suggestion below
+  zero_match_threshold: 10            # Stop scoring below this
+
+  # Transcript enrichment cap (two-pass pipeline)
+  max_caption_downloads: 150
+
+  # Dimension weights by campaign objective (D1–D5 must sum to 100)
+  dimension_weights:
+    awareness:
+      audience_fit: 30
+      engagement_quality: 25
+      content_style_fit: 15
+      brand_safety: 15
+      operational_fit: 15
+    engagement:
+      audience_fit: 20
+      engagement_quality: 35
+      content_style_fit: 20
+      brand_safety: 20
+      operational_fit: 5
+    conversion:
+      audience_fit: 25
+      engagement_quality: 30
+      content_style_fit: 20
+      brand_safety: 20
+      operational_fit: 5
+    community:
+      audience_fit: 20
+      engagement_quality: 20
+      content_style_fit: 30
+      brand_safety: 15
+      operational_fit: 15
+    launch:
+      audience_fit: 25
+      engagement_quality: 25
+      content_style_fit: 20
+      brand_safety: 15
+      operational_fit: 15
+
+  # Partnership tier CCMS thresholds
+  tiers:
+    platinum_min: 85
+    gold_min: 70
+    silver_min: 55
+    bronze_min: 40
+
+  # Signal confidence thresholds
+  cold_start_data_quality_threshold: 0.60
+  stt_min_confidence: 0.72
+  stt_min_words_per_minute: 150
+
+# -----------------------------------------------------------------------------
+# BRAND SAFETY
+# Toxicity thresholds for Perspective API scores (0.0–1.0)
+# -----------------------------------------------------------------------------
+brand_safety:
+  sensitivity_levels:
+    standard:
+      hard_block: 0.70
+      soft_flag_min: 0.40
+    elevated:
+      hard_block: 0.50
+      soft_flag_min: 0.30
+    strict:
+      hard_block: 0.30
+      soft_flag_min: 0.20
+      route_political_to_review: true
+
+  # Authenticity proxy minimum before manual audit flag
+  authenticity_proxy_min: 0.40
+
+  # Organic comment ratio minimum before risk flag
+  organic_comment_ratio_min: 0.70
+
+# -----------------------------------------------------------------------------
+# DATA INGESTION
+# -----------------------------------------------------------------------------
+ingestion:
+  # Comment collection targets per creator
+  target_comments_total: 200
+  target_comments_per_video: 20
+  target_videos_for_comments: 10
+
+  # Minimum activity threshold
+  min_videos_in_90_days: 4
+
+  # STT fallback — number of videos to transcribe before proceeding
+  stt_fallback_max_videos: 3
+
+  # Creator Index refresh schedule (cron-style descriptions — implement in Cloud Scheduler)
+  refresh_schedule:
+    subscriber_engagement: "daily"
+    computed_signals: "weekly"
+    nlp_signals: "weekly"
+    demographics_embeddings: "monthly"
+
+  # View-to-subscriber ratio floor for subscriber quality flag
+  vsr_floor_percent: 5.0
+
+# -----------------------------------------------------------------------------
+# YOUTUBE API QUOTA MANAGEMENT
+# -----------------------------------------------------------------------------
+youtube_quota:
+  global_alert_threshold: 8000       # Alert when this many units consumed today
+  default_workspace_budget: 2000     # Units per workspace per day (standard tier)
+  enterprise_workspace_budget: 4000
+
+# -----------------------------------------------------------------------------
+# AI / LLM
+# -----------------------------------------------------------------------------
+llm:
+  model: "claude-sonnet-4-6"          # Model used for all Anthropic API calls
+  max_tokens: 1000
+  brief_interpretation_temperature: 0.3
+  justification_temperature: 0.4
+  signal_extraction_temperature: 0.2
+  real_world_research_temperature: 0.5
+  retry_max_attempts: 3
+  retry_backoff_multiplier: 2.0
+
+  # Justification word limits per section
+  justification_word_limits:
+    match_summary: 60
+    dimension_highlights: 120
+    risks: 80
+
+# -----------------------------------------------------------------------------
+# EXPORT & HANDOFF
+# -----------------------------------------------------------------------------
+export:
+  # Cloud Storage bucket for export artefacts (production)
+  gcs_bucket: "cpi-exports-dev"
+  signed_url_expiry_hours: 72
+
+  # Jira handoff ticket priority windows (days from campaign start)
+  jira_priority:
+    urgent_days: 7
+    high_days: 14
+
+  # Shortlist version retention
+  version_retention_months: 24
+
+# -----------------------------------------------------------------------------
+# FRONTEND
+# Next.js reads these via next.config.ts; keep in sync with infrastructure above
+# -----------------------------------------------------------------------------
+frontend:
+  api_base_url: "http://localhost:8000/api/v1"
+  image_domains:
+    - "yt3.ggpht.com"
+    - "i.ytimg.com"
+  # Minimum dwell on signal confirmation screen (ms) before confirm enabled
+  confirmation_min_dwell_ms: 3000
+
+# -----------------------------------------------------------------------------
+# CELERY WORKERS
+# -----------------------------------------------------------------------------
+workers:
+  signal_processing_concurrency: 4
+  export_generation_concurrency: 2
+  task_soft_time_limit_seconds: 300
+  task_hard_time_limit_seconds: 600
